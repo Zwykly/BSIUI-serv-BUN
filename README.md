@@ -1,7 +1,7 @@
 # BSIUI-serv-BUN
 
 Messaging server written in TypeScript on the [Bun](https://bun.sh) runtime, using
-[ElysiaJS](https://elysiajs.com) and SQLite (`bun:sqlite`). It is a port of the Python
+[ElysiaJS](https://elysiajs.com) and SQLite (`bun:sqlite`) accessed through [Drizzle ORM](https://orm.drizzle.team). It is a port of the Python
 (FastAPI) server in `BSIUI-Serv` and exposes the same HTTP API. Clients register,
 log in to get a JWT, send messages, and poll for new ones using a `since_id` cursor.
 
@@ -59,7 +59,9 @@ src/
 ├── index.ts            # Entrypoint: starts the server
 ├── app.ts              # Builds the Elysia app (plugins + modules)
 ├── config.ts           # Environment configuration
-├── db/index.ts         # SQLite connection + schema
+├── db/
+│   ├── schema.ts       #   Drizzle table definitions (user, message)
+│   └── index.ts        #   connection, bootstrap DDL, timestamp helpers
 ├── plugins/            # Shared Elysia plugins
 │   ├── database.ts     #   injects `db` into the context
 │   ├── auth.ts         #   JWT + `currentUser` resolver
@@ -78,7 +80,9 @@ Each module follows the Elysia convention: `index.ts` is the controller (routes)
 
 Both servers must keep behaving identically. What is shared, and must stay that way:
 
-- **Database schema:** same `user` and `message` tables and indexes as SQLModel creates.
+- **Database schema:** same `user` and `message` tables and indexes as SQLModel creates
+  (defined in `src/db/schema.ts`; tables are created on start by the DDL in `src/db/index.ts`,
+  so keep the two in sync).
   Timestamps are stored as `YYYY-MM-DD HH:MM:SS.ffffff` (UTC).
 - **Passwords:** Argon2id hashes (same parameters as pwdlib); each server can verify
   hashes written by the other.
