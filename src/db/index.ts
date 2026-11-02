@@ -1,9 +1,11 @@
 import { Database } from 'bun:sqlite'
+import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { config } from '../config'
+import * as schema from './schema'
 
 /**
- * The schema mirrors the tables SQLModel creates in the Python backend, so
- * both servers can run against the same `database.db` file.
+ * Bootstrap DDL, idempotent so it also works on a database created by the
+ * Python backend. Keep in sync with ./schema.ts.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS user (
@@ -29,13 +31,15 @@ CREATE INDEX IF NOT EXISTS ix_message_receiver_id ON message (receiver_id);
 CREATE INDEX IF NOT EXISTS ix_message_created_at ON message (created_at);
 `
 
-export function createDatabase(path: string = config.databasePath): Database {
-  const db = new Database(path, { create: true, strict: true })
-  db.run('PRAGMA journal_mode = WAL')
-  db.run('PRAGMA foreign_keys = ON')
-  db.run(SCHEMA)
-  return db
+export function createDatabase(path: string = config.databasePath) {
+  const sqlite = new Database(path, { create: true, strict: true })
+  sqlite.run('PRAGMA journal_mode = WAL')
+  sqlite.run('PRAGMA foreign_keys = ON')
+  sqlite.run(SCHEMA)
+  return drizzle(sqlite, { schema })
 }
+
+export type Db = ReturnType<typeof createDatabase>
 
 /**
  * SQLAlchemy stores naive UTC datetimes as "YYYY-MM-DD HH:MM:SS.ffffff".
