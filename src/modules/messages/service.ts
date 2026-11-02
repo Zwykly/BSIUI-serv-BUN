@@ -1,6 +1,6 @@
 import { and, asc, count, eq, gt, max, or } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
-import { nowUtc, toIso, type Db } from '../../db'
+import { toIso, type Db } from '../../db'
 import { messages, users, type User } from '../../db/schema'
 import { HttpError } from '../../plugins/errors'
 
@@ -14,7 +14,7 @@ export abstract class MessageService {
 
     const row = db
       .insert(messages)
-      .values({ senderId: sender.id, receiverId: receiver.id, msg, createdAt: nowUtc() })
+      .values({ senderId: sender.id, receiverId: receiver.id, msg })
       .returning({ id: messages.id, createdAt: messages.createdAt })
       .get()
     return { id: row.id, created_at: toIso(row.createdAt, '+00:00') }
