@@ -1,0 +1,418 @@
+{
+  "info": {
+    "title": "BSIUI Messenger API",
+    "description": "Development documentation",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.2",
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Response for status 201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "username"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postAuthRegister"
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "access_token",
+                    "token_type"
+                  ],
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "const": "bearer",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postAuthLogin"
+      }
+    },
+    "/messages": {
+      "post": {
+        "tags": [
+          "messages"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "receiver_name",
+                  "msg"
+                ],
+                "properties": {
+                  "receiver_name": {
+                    "type": "string"
+                  },
+                  "msg": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "receiver_name",
+                  "msg"
+                ],
+                "properties": {
+                  "receiver_name": {
+                    "type": "string"
+                  },
+                  "msg": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "receiver_name",
+                  "msg"
+                ],
+                "properties": {
+                  "receiver_name": {
+                    "type": "string"
+                  },
+                  "msg": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Response for status 201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "created_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postMessages"
+      }
+    },
+    "/messages/update/{since_id}": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "parameters": [
+          {
+            "name": "since_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "integer",
+                  "default": 0,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "senders"
+                  ],
+                  "properties": {
+                    "senders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "username",
+                          "count",
+                          "last_id"
+                        ],
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "last_id": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getMessagesUpdateBySince_id"
+      }
+    },
+    "/messages/history/{since_id}/{receiver_name}": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "parameters": [
+          {
+            "name": "since_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "integer",
+                  "default": 0,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            }
+          },
+          {
+            "name": "receiver_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "sender_name",
+                      "receiver_name",
+                      "msg",
+                      "created_at"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "sender_name": {
+                        "type": "string"
+                      },
+                      "receiver_name": {
+                        "type": "string"
+                      },
+                      "msg": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getMessagesHistoryBySince_idByReceiver_name"
+      }
+    }
+  },
+  "components": {
+    "schemas": {}
+  }
+}

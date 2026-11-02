@@ -1,4 +1,4 @@
-import { swagger } from '@elysiajs/swagger'
+import { openapi } from '@elysiajs/openapi'
 import { Elysia } from 'elysia'
 import { auth } from './modules/auth'
 import { messages } from './modules/messages'
@@ -6,7 +6,13 @@ import { errors } from './plugins/errors'
 
 export const app = new Elysia()
   .use(errors)
-  .use(swagger({ path: '/docs', documentation: { info: { title: 'Moje API', version: '0.1.0' } } }))
+  .use(
+    openapi({
+      path: '/docs',
+      specPath: '/docs/json',
+      documentation: { info: { title: 'BSIUI Messenger API', version: '0.1.0' } }
+    })
+  )
   .use(auth)
   .use(messages)
 
