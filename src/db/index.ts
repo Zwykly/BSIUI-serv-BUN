@@ -46,6 +46,7 @@ export function nowUtc(): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 23)}000`
 }
 
-export function toIso(sqliteDate: string): string {
-  return sqliteDate.replace(' ', 'T')
+/** Python returns `+00:00` from POST /messages but `Z` from the history endpoint. */
+export function toIso(sqliteDate: string, suffix: '+00:00' | 'Z'): string {
+  return `${sqliteDate.replace(' ', 'T')}${suffix}`
 }
