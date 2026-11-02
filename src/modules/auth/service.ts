@@ -1,30 +1,27 @@
-import type { Database } from 'bun:sqlite'
+import { eq } from 'drizzle-orm'
+import type { Db } from '../../db'
+import { users } from '../../db/schema'
 import { HttpError } from '../../plugins/errors'
-import type { User } from '../../plugins/auth'
 
 // Same parameters as pwdlib's recommended Argon2id hasher so hashes stay
 // interchangeable with the Python backend (verification reads them from the hash).
 const ARGON2 = { algorithm: 'argon2id', memoryCost: 65536, timeCost: 3 } as const
 
 export abstract class AuthService {
-  static register(db: Database, login: string, password: string) {
-    const existing = db.query('SELECT 1 FROM user WHERE username = ?').get(login)
+  static register(db: Db, login: string, password: string) {
+    const existing = db.select({ id: users.id }).from(users).where(eq(users.username, login)).get()
     if (existing) throw new HttpError(400, 'Użytkownik już istnieje')
 
-    const hashed = Bun.password.hashSync(password, ARGON2)
-    const user = db
-      .query<{ id: number; username: string }, [string, string]>(
-        'INSERT INTO user (username, hashed_password) VALUES (?, ?) RETURNING id, username'
-      )
-      .get(login, hashed)
-    return user!
+    return db
+      .insert(users)
+      .values({ username: login, hashedPassword: Bun.password.hashSync(password, ARGON2) })
+      .returning({ id: users.id, username: users.username })
+      .get()
   }
 
-  static async authenticate(db: Database, username: string, password: string): Promise<User> {
-    const user = db
-      .query<User, [string]>('SELECT id, username, hashed_password FROM user WHERE username = ?')
-      .get(username)
-    const valid = user && (await Bun.password.verify(password, user.hashed_password).catch(() => false))
+  static async authenticate(db: Db, username: string, password: string) {
+    const user = db.select().from(users).where(eq(users.username, username)).get()
+    const valid = user && (await Bun.password.verify(password, user.hashedPassword).catch(() => false))
     if (!user || !valid) throw new HttpError(401, 'Zły login lub hasło')
     return user
   }

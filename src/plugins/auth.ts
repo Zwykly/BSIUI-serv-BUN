@@ -1,14 +1,10 @@
 import { jwt } from '@elysiajs/jwt'
+import { eq } from 'drizzle-orm'
 import { Elysia } from 'elysia'
 import { config } from '../config'
+import { users } from '../db/schema'
 import { database } from './database'
 import { errors, HttpError } from './errors'
-
-export interface User {
-  id: number
-  username: string
-  hashed_password: string
-}
 
 export const jwtPlugin = jwt({
   name: 'jwt',
@@ -36,9 +32,7 @@ export const authenticated = new Elysia({ name: 'authenticated' })
     const payload = await jwt.verify(token)
     if (!payload || typeof payload.sub !== 'string') throw invalid
 
-    const user = db
-      .query<User, [string]>('SELECT id, username, hashed_password FROM user WHERE username = ?')
-      .get(payload.sub)
+    const user = db.select().from(users).where(eq(users.username, payload.sub)).get()
     if (!user) throw invalid
 
     return { currentUser: user }
