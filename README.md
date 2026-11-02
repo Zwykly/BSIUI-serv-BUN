@@ -5,8 +5,9 @@ Messaging server written in TypeScript on the [Bun](https://bun.sh) runtime, usi
 (FastAPI) server in `BSIUI-Serv` and exposes the same HTTP API. Clients register,
 log in to get a JWT, send messages, and poll for new ones using a `since_id` cursor.
 
-The two backends are **cross-compatible**: they can be swapped, or even run against the
-same `database.db`, without clients or data noticing.
+The two backends are **cross-compatible at the API level**: a client written for one works
+unchanged against the other. Each backend owns its own database and schema, so they do not
+share a `database.db`.
 
 > **Planned:** end-to-end encrypted messaging. See [E2EE roadmap](#e2ee-roadmap).
 
@@ -21,10 +22,18 @@ bun run dev              # watch mode; or `bun run start`
 ```
 
 The server listens on `http://localhost:8000` (override with `PORT`).
-Interactive API docs (Swagger) are at `http://localhost:8000/docs`.
+Interactive API docs are at `http://localhost:8000/docs`; the OpenAPI spec is at `/docs/json` (and committed as `openapi.json`) for generating clients.
 The SQLite database (`database.db`) is created automatically on first start.
 
-Other scripts: `bun test`, `bun run typecheck`.
+| Script                | What it does                                                      |
+| --------------------- | ----------------------------------------------------------------- |
+| `bun test`            | Runs the tests (API contract suite, in-process)                   |
+| `bun run typecheck`   | Type-checks the project                                           |
+| `bun run db:generate` | Generates a SQL migration after editing `src/db/schema.ts`        |
+| `bun run db:studio`   | Opens Drizzle Studio to browse the database                       |
+| `bun run openapi`     | Exports the OpenAPI spec to `openapi.json`                        |
+
+Migrations in `drizzle/` are applied automatically on startup.
 
 ### Configuration (`.env`)
 
@@ -60,8 +69,8 @@ src/
 ├── app.ts              # Builds the Elysia app (plugins + modules)
 ├── config.ts           # Environment configuration
 ├── db/
-│   ├── schema.ts       #   Drizzle table definitions (user, message)
-│   └── index.ts        #   connection, bootstrap DDL, timestamp helpers
+│   ├── schema.ts       #   Drizzle table definitions (source of truth)
+│   └── index.ts        #   connection, auto-migration, timestamp helper
 ├── plugins/            # Shared Elysia plugins
 │   ├── database.ts     #   injects `db` into the context
 │   ├── auth.ts         #   JWT + `currentUser` resolver
@@ -70,6 +79,8 @@ src/
     ├── auth/           #   register / login
     ├── messages/       #   send / update / history
     └── keys/           #   reserved for E2EE (not implemented)
+drizzle/                # Generated SQL migrations (drizzle-kit)
+scripts/                # Helper scripts (OpenAPI export)
 test/                   # bun test suites
 ```
 
@@ -78,22 +89,28 @@ Each module follows the Elysia convention: `index.ts` is the controller (routes)
 
 ## Cross-compatibility with the Python backend
 
-Both servers must keep behaving identically. What is shared, and must stay that way:
+The **HTTP API is the contract**, not the database. Each backend can change its schema,
+ORM or storage freely as long as clients see the same behaviour:
 
-- **Database schema:** same `user` and `message` tables and indexes as SQLModel creates
-  (defined in `src/db/schema.ts`; tables are created on start by the DDL in `src/db/index.ts`,
-  so keep the two in sync).
-  Timestamps are stored as `YYYY-MM-DD HH:MM:SS.ffffff` (UTC).
-- **Passwords:** Argon2id hashes (same parameters as pwdlib); each server can verify
-  hashes written by the other.
-- **JWT:** HS256 with `sub` (username) and `exp`; a token from one server is valid on
-  the other when `SECRET_KEY` matches.
-- **Responses:** same paths, status codes, Polish error messages and field names. Note
-  that `created_at` ends with `+00:00` on `POST /messages` but `Z` in history, as in Python.
+- **Endpoints:** same paths, methods, status codes, field names and Polish error messages.
+- **Auth:** HS256 JWT with `sub` (username) and `exp`, 30 minutes. A token from one server
+  is valid on the other when `SECRET_KEY` matches.
+- **Passwords:** Argon2id. Hashes written by the Python server verify here (covered by a
+  test), so users can be migrated between backends.
+- **Timestamps:** ISO 8601 UTC. `created_at` ends with `+00:00` on `POST /messages` and `Z`
+  in history, as in Python.
+
+The contract test suite (`test/contract.test.ts`) speaks only HTTP, so it can check any server:
+
+```bash
+bun test                                    # this server, in-process
+API_URL=http://127.0.0.1:8000 bun test test/contract.test.ts   # any running server, e.g. Python
+```
+
+It currently passes against both backends. Run it against both whenever the API changes,
+and change both backends together.
 
 Known difference: request-validation errors (`422`) have the same status but a simpler body.
-
-When you change the API, schema, or token/hash format, change both backends.
 
 ## E2EE roadmap
 
@@ -103,5 +120,5 @@ server blind to content:
 - Clients generate key pairs; private keys never leave the device.
 - The server stores a public-key directory (see `src/modules/keys/`) and relays
   messages, storing `message.msg` as opaque ciphertext. Message endpoints stay unchanged.
-- The same key endpoints and table must be added to the Python backend to preserve
-  cross-compatibility.
+- The same key endpoints must be added to the Python backend and to the contract tests
+  to preserve cross-compatibility.
