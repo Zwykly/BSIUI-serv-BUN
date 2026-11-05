@@ -1,6 +1,7 @@
 import { openapi } from '@elysiajs/openapi'
 import { Elysia } from 'elysia'
 import { auth } from './modules/auth'
+import { keys } from './modules/keys'
 import { messages } from './modules/messages'
 import { errors } from './plugins/errors'
 
@@ -15,5 +16,6 @@ export const app = new Elysia()
   )
   .use(auth)
   .use(messages)
+  .use(keys)
 
 export type App = typeof app

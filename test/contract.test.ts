@@ -6,6 +6,7 @@
  *   API_URL=http://127.0.0.1:8000 bun test     # any running server (e.g. the Python one)
  */
 import { beforeAll, describe, expect, it } from 'bun:test'
+import { addOneTimePrekeys, createAccount, type PublicBundle } from './client'
 
 const API_URL = Bun.env.API_URL?.replace(/\/$/, '')
 
@@ -31,6 +32,11 @@ const post = (path: string, body: unknown, token?: string) =>
     headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }) },
     body: JSON.stringify(body)
   })
+// Private key material of each test user (stays client-side).
+const accounts = { alice: await createAccount(3), bob: await createAccount(3) }
+const register = (login: string, account = accounts.alice, pw = password) =>
+  post('/auth/register', { login, password: pw, ...account.bundle })
+
 const get = (path: string, token?: string) =>
   send(path, token ? { headers: { authorization: `Bearer ${token}` } } : undefined)
 
@@ -44,14 +50,32 @@ const token = async (username: string) => ((await (await login(username)).json()
 
 describe('auth', () => {
   it('registers users and rejects duplicates', async () => {
-    const res = await post('/auth/register', { login: alice, password })
+    const res = await register(alice, accounts.alice)
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ id: expect.any(Number), username: alice })
-    expect((await post('/auth/register', { login: bob, password })).status).toBe(201)
+    expect((await register(bob, accounts.bob)).status).toBe(201)
 
-    const dup = await post('/auth/register', { login: alice, password })
+    const dup = await register(alice, accounts.alice)
     expect(dup.status).toBe(400)
     expect(await dup.json()).toEqual({ detail: 'Użytkownik już istnieje' })
+  })
+
+  it('rejects registrations with an invalid key bundle', async () => {
+    const other = await createAccount(1)
+    const { bundle } = accounts.alice
+    const cases: [object, string][] = [
+      [{ ...bundle, ik_pub: 'not-a-key' }, 'Nieprawidłowy klucz publiczny'],
+      [{ ...bundle, opk_pub: [...bundle.opk_pub, 'AAAA'] }, 'Nieprawidłowy klucz publiczny'],
+      // SPK signed by someone else's identity key.
+      [{ ...bundle, sig: other.bundle.sig }, 'Nieprawidłowy podpis klucza'],
+      [{ ...bundle, spk_pub: other.bundle.spk_pub }, 'Nieprawidłowy podpis klucza']
+    ]
+    for (const [keys, detail] of cases) {
+      const res = await post('/auth/register', { login: `carol_${suffix}`, password, ...keys })
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ detail })
+    }
+    expect((await login(`carol_${suffix}`)).status).toBe(401)
   })
 
   it('logs in via form data and returns a bearer token', async () => {
@@ -66,6 +90,60 @@ describe('auth', () => {
     const res = await login(alice, 'wrong')
     expect(res.status).toBe(401)
     expect(await res.json()).toEqual({ detail: 'Zły login lub hasło' })
+  })
+})
+
+describe('keys', () => {
+  const bundleOf = async (username: string, tok: string) => {
+    const res = await get(`/${username}/keys`, tok)
+    expect(res.status).toBe(200)
+    return (await res.json()) as PublicBundle
+  }
+
+  it('requires a valid token', async () => {
+    expect((await get(`/${bob}/keys`)).status).toBe(401)
+    expect((await get('/keys/opk')).status).toBe(401)
+  })
+
+  it('hands out the bundle with a different one-time prekey each time, then none', async () => {
+    const a = await token(alice)
+    const { ik_pub, spk_pub, sig, opk_pub } = accounts.bob.bundle
+
+    const issued = [await bundleOf(bob, a), await bundleOf(bob, a), await bundleOf(bob, a)]
+    for (const b of issued) expect(b).toMatchObject({ username: bob, ik_pub, spk_pub, sig })
+    expect(issued.map((b) => b.opk_pub).sort()).toEqual([...opk_pub].sort())
+
+    expect((await bundleOf(bob, a)).opk_pub).toBeNull()
+    expect(await (await get('/keys/opk', await token(bob))).json()).toEqual({ count: 0 })
+  })
+
+  it('lets users upload fresh one-time prekeys', async () => {
+    const b = await token(bob)
+    const fresh = await addOneTimePrekeys(accounts.bob, 2)
+    const res = await post('/keys/opk', { opk_pub: fresh }, b)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ count: 2 })
+    // Duplicates are ignored.
+    expect(await (await post('/keys/opk', { opk_pub: fresh }, b)).json()).toEqual({ count: 2 })
+
+    const tooMany = await post('/keys/opk', { opk_pub: await addOneTimePrekeys(accounts.bob, 99) }, b)
+    expect(tooMany.status).toBe(400)
+    expect(await tooMany.json()).toEqual({ detail: 'Za dużo kluczy jednorazowych' })
+
+    const invalid = await post('/keys/opk', { opk_pub: ['bm9wZQ=='] }, b)
+    expect(invalid.status).toBe(400)
+    expect(await invalid.json()).toEqual({ detail: 'Nieprawidłowy klucz publiczny' })
+  })
+
+  it('rejects unknown users and own keys', async () => {
+    const a = await token(alice)
+    const missing = await get(`/nobody_${suffix}/keys`, a)
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toEqual({ detail: 'Taki użytkownik nie istnieje' })
+
+    const own = await get(`/${alice}/keys`, a)
+    expect(own.status).toBe(400)
+    expect(await own.json()).toEqual({ detail: 'Nie możesz pobrać własnych kluczy' })
   })
 })
 
