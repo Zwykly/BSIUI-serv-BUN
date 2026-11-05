@@ -19,7 +19,11 @@
                 "type": "object",
                 "required": [
                   "login",
-                  "password"
+                  "password",
+                  "ik_pub",
+                  "spk_pub",
+                  "sig",
+                  "opk_pub"
                 ],
                 "properties": {
                   "login": {
@@ -27,6 +31,26 @@
                   },
                   "password": {
                     "type": "string"
+                  },
+                  "ik_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "spk_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "sig": {
+                    "description": "Base64 ECDSA P-256/SHA-256 signature (r||s, 64 bytes) over the SPKI bytes of spk_pub, made with IK_priv",
+                    "type": "string"
+                  },
+                  "opk_pub": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -36,7 +60,11 @@
                 "type": "object",
                 "required": [
                   "login",
-                  "password"
+                  "password",
+                  "ik_pub",
+                  "spk_pub",
+                  "sig",
+                  "opk_pub"
                 ],
                 "properties": {
                   "login": {
@@ -44,6 +72,26 @@
                   },
                   "password": {
                     "type": "string"
+                  },
+                  "ik_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "spk_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "sig": {
+                    "description": "Base64 ECDSA P-256/SHA-256 signature (r||s, 64 bytes) over the SPKI bytes of spk_pub, made with IK_priv",
+                    "type": "string"
+                  },
+                  "opk_pub": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -53,7 +101,11 @@
                 "type": "object",
                 "required": [
                   "login",
-                  "password"
+                  "password",
+                  "ik_pub",
+                  "spk_pub",
+                  "sig",
+                  "opk_pub"
                 ],
                 "properties": {
                   "login": {
@@ -61,6 +113,26 @@
                   },
                   "password": {
                     "type": "string"
+                  },
+                  "ik_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "spk_pub": {
+                    "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                    "type": "string"
+                  },
+                  "sig": {
+                    "description": "Base64 ECDSA P-256/SHA-256 signature (r||s, 64 bytes) over the SPKI bytes of spk_pub, made with IK_priv",
+                    "type": "string"
+                  },
+                  "opk_pub": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -188,6 +260,26 @@
         "tags": [
           "messages"
         ],
+        "parameters": [
+          {
+            "name": "x-ek-pub",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "description": "Sender's ephemeral public key EK_A-pub",
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-opk-pub",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "description": "Receiver's one-time prekey used for DH4; omit when the bundle had none",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -196,13 +288,19 @@
                 "type": "object",
                 "required": [
                   "receiver_name",
-                  "msg"
+                  "msg",
+                  "iv"
                 ],
                 "properties": {
                   "receiver_name": {
                     "type": "string"
                   },
                   "msg": {
+                    "description": "Base64 of AES-GCM(MESSAGEKEY, plaintext), including the 16-byte tag",
+                    "type": "string"
+                  },
+                  "iv": {
+                    "description": "Base64 of the random 12-byte AES-GCM IV",
                     "type": "string"
                   }
                 }
@@ -213,13 +311,19 @@
                 "type": "object",
                 "required": [
                   "receiver_name",
-                  "msg"
+                  "msg",
+                  "iv"
                 ],
                 "properties": {
                   "receiver_name": {
                     "type": "string"
                   },
                   "msg": {
+                    "description": "Base64 of AES-GCM(MESSAGEKEY, plaintext), including the 16-byte tag",
+                    "type": "string"
+                  },
+                  "iv": {
+                    "description": "Base64 of the random 12-byte AES-GCM IV",
                     "type": "string"
                   }
                 }
@@ -230,13 +334,19 @@
                 "type": "object",
                 "required": [
                   "receiver_name",
-                  "msg"
+                  "msg",
+                  "iv"
                 ],
                 "properties": {
                   "receiver_name": {
                     "type": "string"
                   },
                   "msg": {
+                    "description": "Base64 of AES-GCM(MESSAGEKEY, plaintext), including the 16-byte tag",
+                    "type": "string"
+                  },
+                  "iv": {
+                    "description": "Base64 of the random 12-byte AES-GCM IV",
                     "type": "string"
                   }
                 }
@@ -383,6 +493,9 @@
                       "sender_name",
                       "receiver_name",
                       "msg",
+                      "iv",
+                      "ek_pub",
+                      "opk_pub",
                       "created_at"
                     ],
                     "properties": {
@@ -396,7 +509,31 @@
                         "type": "string"
                       },
                       "msg": {
+                        "description": "Base64 AES-GCM ciphertext (with tag)",
                         "type": "string"
+                      },
+                      "iv": {
+                        "nullable": true,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "ek_pub": {
+                        "nullable": true,
+                        "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "opk_pub": {
+                        "nullable": true,
+                        "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "string"
@@ -409,6 +546,183 @@
           }
         },
         "operationId": "getMessagesHistoryBySince_idByReceiver_name"
+      }
+    },
+    "/{username}/keys": {
+      "get": {
+        "tags": [
+          "keys"
+        ],
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "username",
+                    "ik_pub",
+                    "spk_pub",
+                    "sig",
+                    "opk_pub"
+                  ],
+                  "properties": {
+                    "username": {
+                      "type": "string"
+                    },
+                    "ik_pub": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    },
+                    "spk_pub": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    },
+                    "sig": {
+                      "type": "string"
+                    },
+                    "opk_pub": {
+                      "nullable": true,
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getByUsernameKeys"
+      }
+    },
+    "/keys/opk": {
+      "get": {
+        "tags": [
+          "keys"
+        ],
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "count"
+                  ],
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getKeysOpk"
+      },
+      "post": {
+        "tags": [
+          "keys"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "opk_pub"
+                ],
+                "properties": {
+                  "opk_pub": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "opk_pub"
+                ],
+                "properties": {
+                  "opk_pub": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "opk_pub"
+                ],
+                "properties": {
+                  "opk_pub": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "description": "Base64 of a P-256 public key in SPKI (DER) form",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Response for status 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "count"
+                  ],
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postKeysOpk"
       }
     }
   },
