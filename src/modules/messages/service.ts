@@ -3,18 +3,39 @@ import { alias } from 'drizzle-orm/sqlite-core'
 import { toIso, type Db } from '../../db'
 import { messages, users, type User } from '../../db/schema'
 import { HttpError } from '../../plugins/errors'
+import { decodeBase64, KeyService } from '../keys/service'
+
+const IV_BYTES = 12
+const GCM_TAG_BYTES = 16
+
+/** What the sender attaches to a message so the receiver can redo X3DH. */
+export interface EncryptedPayload {
+  msg: string
+  iv: string
+  ekPub: string
+  opkPub?: string
+}
 
 export abstract class MessageService {
-  static send(db: Db, sender: User, receiverName: string, msg: string) {
+  /**
+   * Sending flow, step 6: store the message. The server cannot read it; it only
+   * checks the payload is shaped like AES-GCM output plus valid X3DH public keys.
+   */
+  static async send(db: Db, sender: User, receiverName: string, payload: EncryptedPayload) {
+    const { msg, iv, ekPub, opkPub } = payload
     if (!msg.trim()) throw new HttpError(400, 'Pusta wiadomość')
 
     const receiver = db.select({ id: users.id }).from(users).where(eq(users.username, receiverName)).get()
     if (!receiver) throw new HttpError(404, 'Odbiorca nie istnieje')
     if (receiver.id === sender.id) throw new HttpError(400, 'Nie możesz pisać do siebie')
 
+    if ((decodeBase64(msg)?.length ?? 0) < GCM_TAG_BYTES) throw new HttpError(400, 'Nieprawidłowy szyfrogram')
+    if (decodeBase64(iv)?.length !== IV_BYTES) throw new HttpError(400, 'Nieprawidłowy wektor IV')
+    await KeyService.assertPublicKeys(opkPub === undefined ? [ekPub] : [ekPub, opkPub])
+
     const row = db
       .insert(messages)
-      .values({ senderId: sender.id, receiverId: receiver.id, msg })
+      .values({ senderId: sender.id, receiverId: receiver.id, msg, iv, ekPub, opkPub: opkPub ?? null })
       .returning({ id: messages.id, createdAt: messages.createdAt })
       .get()
     return { id: row.id, created_at: toIso(row.createdAt, '+00:00') }
@@ -48,6 +69,9 @@ export abstract class MessageService {
         sender_name: sender.username,
         receiver_name: receiver.username,
         msg: messages.msg,
+        iv: messages.iv,
+        ek_pub: messages.ekPub,
+        opk_pub: messages.opkPub,
         created_at: messages.createdAt
       })
       .from(messages)

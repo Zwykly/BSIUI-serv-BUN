@@ -6,7 +6,16 @@
  *   API_URL=http://127.0.0.1:8000 bun test     # any running server (e.g. the Python one)
  */
 import { beforeAll, describe, expect, it } from 'bun:test'
-import { addOneTimePrekeys, createAccount, type PublicBundle } from './client'
+import {
+  addOneTimePrekeys,
+  createAccount,
+  decrypt,
+  encrypt,
+  messageHeaders,
+  type Account,
+  type EncryptedMessage,
+  type PublicBundle
+} from './client'
 
 const API_URL = Bun.env.API_URL?.replace(/\/$/, '')
 
@@ -26,10 +35,10 @@ const alice = `alice_${suffix}`
 const bob = `bob_${suffix}`
 const password = 'secret-pw'
 
-const post = (path: string, body: unknown, token?: string) =>
+const post = (path: string, body: unknown, token?: string, headers: Record<string, string> = {}) =>
   send(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }) },
+    headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }), ...headers },
     body: JSON.stringify(body)
   })
 // Private key material of each test user (stays client-side).
@@ -148,6 +157,19 @@ describe('keys', () => {
 })
 
 describe('messages', () => {
+  type HistoryEntry = EncryptedMessage & { id: number; sender_name: string; receiver_name: string; created_at: string }
+
+  const bundleOf = async (username: string, tok: string) =>
+    (await (await get(`/${username}/keys`, tok)).json()) as PublicBundle
+
+  /** Whole sending flow: fetch the receiver's keys, encrypt, POST /messages. */
+  const sendEncrypted = async (from: Account, tok: string, to: string, plaintext: string, bundle?: PublicBundle) => {
+    const encrypted = await encrypt(from, bundle ?? (await bundleOf(to, tok)), plaintext)
+    const { ek_pub, opk_pub, ...body } = encrypted
+    const res = await post('/messages', { receiver_name: to, ...body }, undefined, messageHeaders(tok, encrypted))
+    return { res, encrypted }
+  }
+
   it('requires a valid token', async () => {
     expect((await get('/messages/update/0')).status).toBe(401)
     const bad = await get('/messages/update/0', 'garbage')
@@ -155,46 +177,74 @@ describe('messages', () => {
     expect(await bad.json()).toEqual({ detail: 'Nieprawidłowy token' })
   })
 
-  it('sends a message, then exposes it via update and history', async () => {
+  it('relays an encrypted message that only the receiver can decrypt', async () => {
     const [a, b] = [await token(alice), await token(bob)]
 
-    const sent = await post('/messages', { receiver_name: bob, msg: 'hej' }, a)
-    expect(sent.status).toBe(201)
-    const { id, created_at } = (await sent.json()) as { id: number; created_at: string }
+    const { res, encrypted } = await sendEncrypted(accounts.alice, a, bob, 'hej')
+    expect(res.status).toBe(201)
+    const { id, created_at } = (await res.json()) as { id: number; created_at: string }
     expect(created_at).toMatch(/\+00:00$/)
+    expect(encrypted.opk_pub).not.toBeNull()
 
     expect(await (await get('/messages/update/0', b)).json()).toEqual({
       senders: [{ username: alice, count: 1, last_id: id }]
     })
     expect(await (await get(`/messages/update/${id}`, b)).json()).toEqual({ senders: [] })
 
-    const history = (await (await get(`/messages/history/0/${alice}`, b)).json()) as Record<string, unknown>[]
+    const history = (await (await get(`/messages/history/0/${alice}`, b)).json()) as HistoryEntry[]
     expect(history).toEqual([
-      { id, sender_name: alice, receiver_name: bob, msg: 'hej', created_at: expect.stringMatching(/Z$/) }
+      { id, sender_name: alice, receiver_name: bob, ...encrypted, created_at: expect.stringMatching(/Z$/) }
     ])
+    expect(history[0]!.msg).not.toContain('hej')
     expect(await (await get(`/messages/history/${id}/${alice}`, b)).json()).toEqual([])
+
+    // Bob gets IK_A-pub from Alice's bundle (which he also needs to reply) and decrypts.
+    const aliceKeys = await bundleOf(alice, b)
+    expect(await decrypt(accounts.bob, aliceKeys.ik_pub, history[0]!)).toBe('hej')
+    // Anyone else's private keys fail the GCM authentication.
+    await expect(decrypt(accounts.alice, aliceKeys.ik_pub, history[0]!)).rejects.toThrow()
   })
 
-  it('orders history oldest first for both directions', async () => {
+  it('falls back to 3-DH when the receiver has no one-time prekeys left', async () => {
     const [a, b] = [await token(alice), await token(bob)]
-    await post('/messages', { receiver_name: alice, msg: 'odp' }, b)
-    const history = (await (await get(`/messages/history/0/${bob}`, a)).json()) as { msg: string; id: number }[]
-    expect(history.map((m) => m.msg)).toEqual(['hej', 'odp'])
+    let bundle = await bundleOf(alice, b)
+    while (bundle.opk_pub) bundle = await bundleOf(alice, b)
+
+    const { res, encrypted } = await sendEncrypted(accounts.bob, b, alice, 'odp', bundle)
+    expect(res.status).toBe(201)
+
+    const history = (await (await get(`/messages/history/0/${bob}`, a)).json()) as HistoryEntry[]
     expect(history[0]!.id).toBeLessThan(history[1]!.id)
+    expect(history.map((m) => m.sender_name)).toEqual([alice, bob])
+    expect(history[1]).toMatchObject({ ...encrypted, opk_pub: null })
+    expect(await decrypt(accounts.alice, accounts.bob.bundle.ik_pub, history[1]!)).toBe('odp')
   })
 
   it('rejects invalid sends', async () => {
     const a = await token(alice)
-    const cases: [object, number, string][] = [
-      [{ receiver_name: bob, msg: '   ' }, 400, 'Pusta wiadomość'],
-      [{ receiver_name: alice, msg: 'x' }, 400, 'Nie możesz pisać do siebie'],
-      [{ receiver_name: `nobody_${suffix}`, msg: 'x' }, 404, 'Odbiorca nie istnieje']
+    const valid = await encrypt(accounts.alice, await bundleOf(bob, a), 'x')
+    const { ek_pub, opk_pub, ...body } = valid
+    const headers = messageHeaders(a, valid)
+
+    const cases: [object, Record<string, string>, number, string][] = [
+      [{ ...body, receiver_name: bob, msg: '   ' }, headers, 400, 'Pusta wiadomość'],
+      [{ ...body, receiver_name: alice }, headers, 400, 'Nie możesz pisać do siebie'],
+      [{ ...body, receiver_name: `nobody_${suffix}` }, headers, 404, 'Odbiorca nie istnieje'],
+      [{ ...body, receiver_name: bob, msg: 'plain text' }, headers, 400, 'Nieprawidłowy szyfrogram'],
+      [{ ...body, receiver_name: bob, iv: 'AAAA' }, headers, 400, 'Nieprawidłowy wektor IV'],
+      [{ ...body, receiver_name: bob }, { ...headers, 'x-ek-pub': 'AAAA' }, 400, 'Nieprawidłowy klucz publiczny'],
+      [{ ...body, receiver_name: bob }, { ...headers, 'x-opk-pub': 'AAAA' }, 400, 'Nieprawidłowy klucz publiczny']
     ]
-    for (const [body, status, detail] of cases) {
-      const res = await post('/messages', body, a)
+    for (const [payload, hdrs, status, detail] of cases) {
+      const res = await post('/messages', payload, undefined, hdrs)
       expect(res.status).toBe(status)
       expect(await res.json()).toEqual({ detail })
     }
+
+    const { 'x-ek-pub': _, ...withoutEk } = headers
+    expect((await post('/messages', { ...body, receiver_name: bob }, undefined, withoutEk)).status).toBe(422)
+    expect((await post('/messages', { receiver_name: bob, msg: body.msg }, undefined, headers)).status).toBe(422)
+
     const missing = await get(`/messages/history/0/nobody_${suffix}`, a)
     expect(missing.status).toBe(404)
     expect(await missing.json()).toEqual({ detail: 'Taki użytkownik nie istnieje' })
